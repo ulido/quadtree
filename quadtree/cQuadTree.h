@@ -5,25 +5,36 @@ typedef struct {
   double half_dim;
 } AABB;
 
-struct QuadTreeNode {
+struct cQuadTreeNode {
   AABB boundary;
 
-  double points[2*NODE_CAPACITY];
+  size_t indices[NODE_CAPACITY];
   unsigned int size;
 
-  struct QuadTreeNode* northwest;
-  struct QuadTreeNode* northeast;
-  struct QuadTreeNode* southwest;
-  struct QuadTreeNode* southeast;
+  struct cQuadTreeNode* northwest;
+  struct cQuadTreeNode* northeast;
+  struct cQuadTreeNode* southwest;
+  struct cQuadTreeNode* southeast;
 };
-typedef struct QuadTreeNode QuadTreeNode;
+typedef struct cQuadTreeNode cQuadTreeNode;
+
+typedef struct {
+  cQuadTreeNode *root;
+  double* points;
+  void** attrib;
+  size_t count;
+  size_t capacity;
+} cQuadTree;
 
 int AABB_contains(const AABB *aabb, const double *p);
 int AABB_intersects(const AABB *this, const AABB *other);
 
-QuadTreeNode* QuadTreeNode_new(const AABB boundary);
-void QuadTreeNode_free(QuadTreeNode* qt);
-int QuadTreeNode_insert(QuadTreeNode *qt, const double* p);
-double *QuadTreeNode_query(const QuadTreeNode *qt, const AABB *range, unsigned int* res_size);
-void QuadTreeNode_debug_traverse(const QuadTreeNode *qt, int level);
+cQuadTreeNode* cQuadTreeNode_new(const AABB boundary);
+void cQuadTreeNode_free(cQuadTreeNode* qt);
+int cQuadTreeNode_insert(cQuadTreeNode *qt, size_t index, const double *p);
 
+cQuadTree* cQuadTree_new(const AABB boundary);
+void cQuadTree_free(cQuadTree *qt);
+int cQuadTree_insert(cQuadTree *qt, const double *p, void* attrib);
+double* cQuadTree_query(const cQuadTree *qt, const AABB *range, size_t* res_size, void** attrib[]);
+double** cQuadTree_query_self(const cQuadTree *qt, const double half_dim, size_t *N, size_t **M);

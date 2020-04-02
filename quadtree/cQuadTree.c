@@ -22,15 +22,15 @@ int AABB_intersects(const AABB *this, const AABB *other) {
   return 0;
 }
 
-QuadTreeNode* QuadTreeNode_new(const AABB boundary) {
-  QuadTreeNode* qt;
+cQuadTreeNode* cQuadTreeNode_new(const AABB boundary) {
+  cQuadTreeNode* qt;
 
-  qt = (QuadTreeNode*)calloc(1, sizeof(QuadTreeNode));
+  qt = (cQuadTreeNode*)calloc(1, sizeof(cQuadTreeNode));
   qt->boundary = boundary;
   return qt;
 }
 
-void QuadTreeNode_subdivide(QuadTreeNode *qt) {
+void cQuadTreeNode_subdivide(cQuadTreeNode *qt) {
   AABB boundary;
   double hd;
 
@@ -39,134 +39,191 @@ void QuadTreeNode_subdivide(QuadTreeNode *qt) {
   
   boundary.center[0] = qt->boundary.center[0] - hd;
   boundary.center[1] = qt->boundary.center[1] - hd;
-  qt->northwest = QuadTreeNode_new(boundary);
+  qt->northwest = cQuadTreeNode_new(boundary);
   
   boundary.center[0] = qt->boundary.center[0] + hd;
   boundary.center[1] = qt->boundary.center[1] - hd;
-  qt->northeast = QuadTreeNode_new(boundary);
+  qt->northeast = cQuadTreeNode_new(boundary);
   
   boundary.center[0] = qt->boundary.center[0] - hd;
   boundary.center[1] = qt->boundary.center[1] + hd;
-  qt->southwest = QuadTreeNode_new(boundary);
+  qt->southwest = cQuadTreeNode_new(boundary);
 
   boundary.center[0] = qt->boundary.center[0] + hd;
   boundary.center[1] = qt->boundary.center[1] + hd;
-  qt->southeast = QuadTreeNode_new(boundary);
+  qt->southeast = cQuadTreeNode_new(boundary);
 }
 
-void QuadTreeNode_free(QuadTreeNode* qt) {
+void cQuadTreeNode_free(cQuadTreeNode* qt) {
   if (qt->northwest) {
-    QuadTreeNode_free(qt->northwest);
-    QuadTreeNode_free(qt->northeast);
-    QuadTreeNode_free(qt->southwest);
-    QuadTreeNode_free(qt->southeast);
+    cQuadTreeNode_free(qt->northwest);
+    cQuadTreeNode_free(qt->northeast);
+    cQuadTreeNode_free(qt->southwest);
+    cQuadTreeNode_free(qt->southeast);
   }
   free(qt);
 }
 
-int QuadTreeNode_insert(QuadTreeNode* qt, const double *p) {
+int cQuadTreeNode_insert(cQuadTreeNode* qt, size_t index, const double *p) {
   if (!AABB_contains(&(qt->boundary), p))
     return 0;
 
   if ((qt->size < NODE_CAPACITY) && (!(qt->northwest))) {
-    qt->points[2*qt->size] = p[0];
-    qt->points[2*qt->size+1] = p[1];
+    qt->indices[qt->size] = index;
     qt->size++;
     return 1;
   }
   
   if (!qt->northwest)
-    QuadTreeNode_subdivide(qt);
+    cQuadTreeNode_subdivide(qt);
 
-  if (QuadTreeNode_insert(qt->northwest, p)) return 1;
-  if (QuadTreeNode_insert(qt->northeast, p)) return 1;
-  if (QuadTreeNode_insert(qt->southwest, p)) return 1;
-  if (QuadTreeNode_insert(qt->southeast, p)) return 1;
+  if (cQuadTreeNode_insert(qt->northwest, index, p)) return 1;
+  if (cQuadTreeNode_insert(qt->northeast, index, p)) return 1;
+  if (cQuadTreeNode_insert(qt->southwest, index, p)) return 1;
+  if (cQuadTreeNode_insert(qt->southeast, index, p)) return 1;
 
   return 0;
 }
 
-struct PointEntry {
-  const double *p;
-  struct PointEntry *next;
-};
-typedef struct PointEntry PointEntry;
-
-void _QuadTreeNode_query(const QuadTreeNode *qt, const AABB *range, PointEntry **rfirst, unsigned int *size) {
-  PointEntry* first;
-  PointEntry* newpoint;
-
+void _cQuadTreeNode_query(const cQuadTreeNode *qt, const AABB *range, const double* points,
+			 size_t** indices, size_t* size, size_t* capacity) {
   const double *p;
   unsigned int i;
+  size_t index, res_index;
 
   if (!AABB_intersects(&(qt->boundary), range))
     return;
 
-  first = *rfirst;
   for (i=0; i < qt->size; i++) {
-    p = &(qt->points[2*i]);
+    index = qt->indices[i];
+    p = &(points[2*index]);
     if (AABB_contains(range, p)) {
-      newpoint = (PointEntry*)malloc(sizeof(PointEntry));
-      newpoint->p = p;
-      newpoint->next = first;
-      first = newpoint;
+      res_index = *size;
+      if (res_index == *capacity) {
+	(*capacity) *= 2;
+	*indices = (size_t*)realloc(*indices, (*capacity)*sizeof(size_t));
+      }
       (*size)++;
+      (*indices)[res_index] = index;
     }
   }
 
   if (qt->northwest) {
-    _QuadTreeNode_query(qt->northwest, range, &first, size);
-    _QuadTreeNode_query(qt->northeast, range, &first, size);
-    _QuadTreeNode_query(qt->southwest, range, &first, size);
-    _QuadTreeNode_query(qt->southeast, range, &first, size);
-  }
-
-  *rfirst = first;
-}
-
-void QuadTreeNode_debug_traverse(const QuadTreeNode *qt, int level) {
-  int i;
-  unsigned int j;
-  if (qt->size == 0)
-    return;
-  for (i=0; i<level; i++)
-    printf("  ");
-  printf("(%f, %f) %f\n", qt->boundary.center[0], qt->boundary.center[1], qt->boundary.half_dim);
-  for (j=0; j<qt->size; j++) {
-    for (i=0; i<level; i++)
-      printf("  ");
-    printf("  %f %f\n", qt->points[2*j], qt->points[2*j+1]);
-  }
-
-  if (qt->northwest) {
-    QuadTreeNode_debug_traverse(qt->northwest, level+1);
-    QuadTreeNode_debug_traverse(qt->northeast, level+1);
-    QuadTreeNode_debug_traverse(qt->southwest, level+1);
-    QuadTreeNode_debug_traverse(qt->southeast, level+1);
+    _cQuadTreeNode_query(qt->northwest, range, points, indices, size, capacity);
+    _cQuadTreeNode_query(qt->northeast, range, points, indices, size, capacity);
+    _cQuadTreeNode_query(qt->southwest, range, points, indices, size, capacity);
+    _cQuadTreeNode_query(qt->southeast, range, points, indices, size, capacity);
   }
 }
 
-double* QuadTreeNode_query(const QuadTreeNode *qt, const AABB *range,
-			   unsigned int *res_size) {
-  PointEntry* first;
-  PointEntry* tmp;
-  unsigned int i, size;
+#define INITIAL_N 64
+cQuadTree* cQuadTree_new(const AABB boundary) {
+  cQuadTree *qt;
+
+  qt = (cQuadTree*)malloc(sizeof(cQuadTree));
+  qt->root = cQuadTreeNode_new(boundary);
+  qt->points = (double*)malloc(2*INITIAL_N*sizeof(double));
+  qt->attrib = (void**)malloc(INITIAL_N*sizeof(void*));
+  qt->count = 0;
+  qt->capacity = INITIAL_N;
+
+  return qt;
+}
+
+void cQuadTree_free(cQuadTree* qt) {
+  cQuadTreeNode_free(qt->root);
+  free(qt->points);
+  free(qt->attrib);
+}
+
+int cQuadTree_insert(cQuadTree *qt, const double *p, void* attrib) {
+  size_t idx;
+
+  idx = qt->count;
+  qt->count++;
+  if (qt->count == qt->capacity) {
+    qt->points = (double*)realloc(qt->points, 4*qt->capacity*sizeof(double));
+    qt->attrib = (void**)realloc(qt->attrib, 2*qt->capacity*sizeof(void*));
+    assert(qt->points != NULL);
+    qt->capacity *= 2;
+  }
+  qt->points[2*idx] = p[0];
+  qt->points[2*idx+1] = p[1];
+  qt->attrib[idx] = attrib;
+
+  if (cQuadTreeNode_insert(qt->root, idx, &(qt->points[2*idx])) == 0) {
+    qt->count--;
+    return 0;
+  }
+  return 1;
+}
+
+double* cQuadTree_query(const cQuadTree *qt, const AABB *range,
+		       size_t *res_size, void** attrib[]) {
+  size_t i, size, capacity;
   double *points;
+  size_t *indices;
+  size_t index;
 
-  first = NULL;
   size = 0;
-  _QuadTreeNode_query(qt, range, &first, &size);
+  capacity = INITIAL_N;
+  indices = (size_t*)malloc(capacity*sizeof(size_t));
   
+  _cQuadTreeNode_query(qt->root, range, qt->points, &indices, &size, &capacity);
+ 
   points = (double*)malloc(2*size*sizeof(double));
+  if (attrib != NULL)
+    *attrib = (void**)malloc(size*sizeof(void*));
   for (i=0; i<size; i++) {
-    points[2*i] = first->p[0];
-    points[2*i+1] = first->p[1];
-    tmp = first;
-    first = first->next;
-    if (tmp)
-      free(tmp);
+    index = indices[i];
+    points[2*i] = qt->points[2*index];
+    points[2*i+1] = qt->points[2*index+1];
+    if (attrib != NULL)
+      attrib[i] = qt->attrib[index];
   }
+  free(indices);
+  
   *res_size = size;
+  return points;
+}
 
+double** cQuadTree_query_self(const cQuadTree *qt, const double half_dim,
+			     size_t *N, size_t **M) {
+  size_t i, j, c, size, capacity;
+  double** points;
+  size_t* indices;
+  size_t index;
+  AABB range;
+
+  range.half_dim = half_dim;
+  
+  capacity = INITIAL_N;
+  indices = (size_t*)malloc(capacity*sizeof(size_t));
+
+  points = (double**)malloc(qt->count*sizeof(double*));
+  (*M) = (size_t*)malloc(qt->count*sizeof(size_t));
+  for (j=0; j<qt->count; j++) {
+    range.center[0] = qt->points[2*j];
+    range.center[1] = qt->points[2*j+1];
+
+    size = 0;
+    _cQuadTreeNode_query(qt->root, &range, qt->points, &indices, &size, &capacity);
+
+    points[j] = (double*)malloc(2*size*sizeof(double));
+    (*M)[j] = size-1;
+
+    c = 0;
+    for (i=0; i<size; i++) {
+      index = indices[i];
+      if (index != j) {
+	points[j][2*c] = qt->points[2*index];
+	points[j][2*c+1] = qt->points[2*index+1];
+	c++;
+      }
+    }
+  }
+  free(indices);
+
+  *N = qt->count;
   return points;
 }
