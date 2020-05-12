@@ -13,8 +13,8 @@ cdef extern from "cQuadTree.h":
 
     cQuadTree* cQuadTree_new(const AABB aabb)
     void cQuadTree_free(cQuadTree* qt)
-    int cQuadTree_insert(cQuadTree* qt, const double* p, void* attrib)
-    double* cQuadTree_query(const cQuadTree *qt, const AABB *range, size_t *size, void** attrib[])
+    int cQuadTree_insert(cQuadTree* qt, const double* p, unsigned long id_val)
+    double* cQuadTree_query(const cQuadTree *qt, const AABB *range, size_t *size, unsigned long* ids[])
     double** cQuadTree_query_self(const cQuadTree *qt, const double half_dim, size_t *N, size_t **M)
 
 cdef class QuadTree:
@@ -30,8 +30,8 @@ cdef class QuadTree:
 
         self.qt = cQuadTree_new(boundary)
 
-    def insert(QuadTree self, double[::view.contiguous] point):
-        if cQuadTree_insert(self.qt, &(point[0]), NULL) == 0:
+    def insert(QuadTree self, double[::view.contiguous] point, unsigned long id_val=0):
+        if cQuadTree_insert(self.qt, &(point[0]), id_val) == 0:
             raise ValueError('Point could not be inserted at (%f, %f).' % (point[0], point[1]))
 
     def insert_points(QuadTree self, points):
@@ -44,9 +44,23 @@ cdef class QuadTree:
         for i in range(p_arr.shape[0]):
             self.insert(p_arr[i])
 
-    def query(QuadTree self, double[:] point, double distance):
+    def insert_points_with_ids(QuadTree self, points, id_vals):
+        cdef size_t i
+        cdef object a
+        cdef double[:, ::view.contiguous] p_arr
+        if not points.flags['C_CONTIGUOUS']:
+            points = np.ascontiguousarray(points)
+        p_arr = points
+        
+        for i in range(p_arr.shape[0]):
+            self.insert(p_arr[i], id_vals[i])
+
+
+    def query(QuadTree self, double[:] point, double distance, return_ids=False):
         cdef AABB search_domain
         cdef double* results
+        cdef unsigned long* ids
+        cdef unsigned long** out_ids
         cdef size_t i, size
         cdef double[:, :] res_mv
         
@@ -54,7 +68,11 @@ cdef class QuadTree:
         search_domain.center[1] = point[1]
         search_domain.half_dim = distance
 
-        results = cQuadTree_query(self.qt, &search_domain, &size, NULL)
+        if return_ids:
+            out_ids = <unsigned long**>(&ids)
+        else:
+            out_ids = NULL
+        results = cQuadTree_query(self.qt, &search_domain, &size, out_ids)
         res_arr = np.empty((size, 2), dtype=float)
         res_mv = res_arr
         for i in range(size):
@@ -62,6 +80,12 @@ cdef class QuadTree:
             res_mv[i, 1] = results[2*i+1]
         free(results)
 
+        if return_ids:
+            id_list = []
+            for i in range(size):
+                id_list.append(ids[i])
+            free(ids)
+            return res_arr, id_list
         return res_arr
 
     def query_self(QuadTree self, double distance):

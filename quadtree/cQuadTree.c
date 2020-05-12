@@ -123,7 +123,7 @@ cQuadTree* cQuadTree_new(const AABB boundary) {
   qt = (cQuadTree*)malloc(sizeof(cQuadTree));
   qt->root = cQuadTreeNode_new(boundary);
   qt->points = (double*)malloc(2*INITIAL_N*sizeof(double));
-  qt->attrib = (void**)malloc(INITIAL_N*sizeof(void*));
+  qt->ids = (unsigned long*)malloc(INITIAL_N*sizeof(unsigned long));
   qt->count = 0;
   qt->capacity = INITIAL_N;
 
@@ -133,23 +133,23 @@ cQuadTree* cQuadTree_new(const AABB boundary) {
 void cQuadTree_free(cQuadTree* qt) {
   cQuadTreeNode_free(qt->root);
   free(qt->points);
-  free(qt->attrib);
+  free(qt->ids);
 }
 
-int cQuadTree_insert(cQuadTree *qt, const double *p, void* attrib) {
+int cQuadTree_insert(cQuadTree *qt, const double *p, unsigned long id) {
   size_t idx;
 
   idx = qt->count;
   qt->count++;
   if (qt->count == qt->capacity) {
     qt->points = (double*)realloc(qt->points, 4*qt->capacity*sizeof(double));
-    qt->attrib = (void**)realloc(qt->attrib, 2*qt->capacity*sizeof(void*));
+    qt->ids = (void**)realloc(qt->ids, 2*qt->capacity*sizeof(unsigned long));
     assert(qt->points != NULL);
     qt->capacity *= 2;
   }
   qt->points[2*idx] = p[0];
   qt->points[2*idx+1] = p[1];
-  qt->attrib[idx] = attrib;
+  qt->ids[idx] = id;
 
   if (cQuadTreeNode_insert(qt->root, idx, &(qt->points[2*idx])) == 0) {
     qt->count--;
@@ -159,7 +159,7 @@ int cQuadTree_insert(cQuadTree *qt, const double *p, void* attrib) {
 }
 
 double* cQuadTree_query(const cQuadTree *qt, const AABB *range,
-		       size_t *res_size, void** attrib[]) {
+		       size_t *res_size, unsigned long** ids) {
   size_t i, size, capacity;
   double *points;
   size_t *indices;
@@ -172,14 +172,14 @@ double* cQuadTree_query(const cQuadTree *qt, const AABB *range,
   _cQuadTreeNode_query(qt->root, range, qt->points, &indices, &size, &capacity);
  
   points = (double*)malloc(2*size*sizeof(double));
-  if (attrib != NULL)
-    *attrib = (void**)malloc(size*sizeof(void*));
+  if (ids != NULL)
+    *ids = (unsigned long*)malloc(size*sizeof(unsigned long));
   for (i=0; i<size; i++) {
     index = indices[i];
     points[2*i] = qt->points[2*index];
     points[2*i+1] = qt->points[2*index+1];
-    if (attrib != NULL)
-      attrib[i] = qt->attrib[index];
+    if (ids != NULL)
+      (*ids)[i] = qt->ids[index];
   }
   free(indices);
   
