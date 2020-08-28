@@ -168,16 +168,15 @@ cdef class QuadTree:
         """For each point in the tree, find the neighbors within `distance`.
         
         For each point in the tree (in the order in which they were inserted), returns the
-        neighbors within distance (this will also contain the original point).
+        neighbors within distance (this will NOT contain the original point).
         
         Args:
           distance: Float representing the maximum Manhattan distance for the neighborhood search.
           
         Returns:
           A list of Nx2 numpy float arrays containing the x and y coordinates of all N neighbors within the
-          specified distance of each point in the tree. Because the original points have a self-distance of
-          zero, they are also contained within the resulting arrays. The original insertion order of the
-          points in the tree determines the order of the returned list.
+          specified distance of each point in the tree. The original points are not included in the neighbor array.
+          The insertion order of the points in the tree determines the order of the returned list.
         """
         
         cdef size_t i, j, N
