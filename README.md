@@ -4,7 +4,7 @@ quadtree is a small and efficient Python quadtree library, written in C for spee
 
 ## Installation
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install foobar.
+Use the package manager [pip](https://pip.pypa.io/en/stable/) to install.
 
 ```bash
 pip install git+https://github.com/ulido/quadtree
